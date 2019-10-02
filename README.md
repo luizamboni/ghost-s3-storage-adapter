@@ -1,9 +1,7 @@
 # Ghost storage adapter S3
 
-An AWS S3 storage adapter for Ghost 1.x
-
-For Ghost 0.10.x and 0.11.x support check out
-[Ghost storage adapter s3 v1.3.0](https://github.com/colinmeinke/ghost-storage-adapter-s3/releases/tag/v1.3.0).
+An AWS S3 storage adapter for Ghost 2.x
+based on ghost-storage-adapter-s3
 
 ## Installation
 
