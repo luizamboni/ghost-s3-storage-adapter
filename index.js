@@ -106,7 +106,7 @@ class Store extends BaseStore {
         
         const normalizedFilename = stripLeadingSlash(fileName.toLowerCase());
         
-        const ghostPath = normalizedFilename.match(/(\/\d{4}\/\d{2}\/.*)$/)
+        const [ , ghostPath ] = normalizedFilename.match(/(\/\d{4}\/\d{2}\/.*)$/)
 
         const s3RequestParams = {
           ACL: this.acl,
