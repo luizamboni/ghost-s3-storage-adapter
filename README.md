@@ -1,16 +1,17 @@
 # Ghost storage adapter S3
 
-An AWS S3 storage adapter for Ghost 1.x
+An AWS S3 storage adapter for Ghost 2.x
 
-For Ghost 0.10.x and 0.11.x support check out
-[Ghost storage adapter s3 v1.3.0](https://github.com/colinmeinke/ghost-storage-adapter-s3/releases/tag/v1.3.0).
 
 ## Installation
 
+unfortunely ghost not have yet a way to package plugins, adaptes, then
+you can download a bundle with all dependencies em copy to your storage path
+
+
 ```shell
-npm install ghost-storage-adapter-s3
-mkdir -p ./content/adapters/storage
-cp -r ./node_modules/ghost-storage-adapter-s3 ./content/adapters/storage/s3
+# for example
+$ wget https://github.com/luizamboni/ghost-s3-storage-adapter/blob/master/dist/0.0.1/s3.js  ./content/adapters/storage/s3.js
 ```
 
 ## Configuration
@@ -22,8 +23,9 @@ cp -r ./node_modules/ghost-storage-adapter-s3 ./content/adapters/storage/s3
     "accessKeyId": "YOUR_ACCESS_KEY_ID",
     "secretAccessKey": "YOUR_SECRET_ACCESS_KEY",
     "region": "YOUR_REGION_SLUG",
+
     "bucket": "YOUR_BUCKET_NAME",
-    "assetHost": "YOUR_OPTIONAL_CDN_URL (See note 1 below)",
+    "assetHost": "YOUR_OPTIONAL_CDN_URL (with path prefix)",
     "signatureVersion": "REGION_SIGNATURE_VERSION (See note 5 below)",
     "pathPrefix": "YOUR_OPTIONAL_BUCKET_SUBDIRECTORY",
     "endpoint": "YOUR_OPTIONAL_ENDPOINT_URL (only needed for 3rd party S3 providers)",
@@ -33,15 +35,13 @@ cp -r ./node_modules/ghost-storage-adapter-s3 ./content/adapters/storage/s3
   }
 }
 ```
-Note 1: Be sure to include "//" or the appropriate protocol within your assetHost string/variable to ensure that your site's domain is not prepended to the CDN URL.
 
-Note 2: if your s3 bucket enforces SSE use serverSideEncryption with the [appropriate supported](https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#putObject-property) value.
+Optionaly you can pass AWS configs as standart way, with env vars:
 
-Note 3: if your s3 providers requires path style you can enable it with `forcePathStyle`
+ - AWS_ACCESS_KEY_ID
+ - AWS_SECRET_ACCESS_KEY
+ - AWS_DEFAULT_REGION
 
-Note 4: if you use CloudFront the object ACL does not need to be set to "public-read"
-
-Note 5: [Support for AWS4-HMAC-SHA256](https://github.com/colinmeinke/ghost-storage-adapter-s3/issues/43)
 
 ### Via environment variables
 
@@ -49,30 +49,8 @@ Note 5: [Support for AWS4-HMAC-SHA256](https://github.com/colinmeinke/ghost-stor
 AWS_ACCESS_KEY_ID
 AWS_SECRET_ACCESS_KEY
 AWS_DEFAULT_REGION
-GHOST_STORAGE_ADAPTER_S3_PATH_BUCKET
-GHOST_STORAGE_ADAPTER_S3_ASSET_HOST  // optional
-GHOST_STORAGE_ADAPTER_S3_PATH_PREFIX // optional
-GHOST_STORAGE_ADAPTER_S3_ENDPOINT // optional
-GHOST_STORAGE_ADAPTER_S3_SSE // optional
-GHOST_STORAGE_ADAPTER_S3_FORCE_PATH_STYLE // optional
-GHOST_STORAGE_ADAPTER_S3_ACL // optional
 ```
 
-## AWS Configuration
-You'll likely want to configure a separate S3 bucket for your blog, a specific IAM role, and, optionally, CloudFront, to serve from a CDN.
-
-### S3
-Create a new bucket. If you're using a CDN, the region isn't important. Once the bucket is created, select Static website hosting from the properties, and configure it to host a website.
-
-In the permissions, select Bucket Policy and use the policy generator with the folowing settings:
-- Select Type of Policy: **S3 Bucket Policy**
-- Effect: **Allow**
-- Principal: *
-- AWS Service: **Amazon S3**
-- Actions: **GetBucket**
-- Amazon Resource Name (ARN): *your bucket's ARN, which you can get on its Bucket Policy page*
-
-Generate the policy, copy it, then paste it in the Bucket policy editor and save.
 
 ### IAM
 You'll want to create a custom user role in IAM that just gives your Ghost installation the necessary permissions to manipulate objects in its S3 bucket.

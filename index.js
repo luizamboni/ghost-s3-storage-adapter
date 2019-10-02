@@ -2,17 +2,16 @@
 
 const AWS = require('aws-sdk');
 const BaseStore = require('ghost-storage-base');
-const {join} = require('path');
-const {readFile} = require('fs');
+const path = require('path');
+const fs = require('fs');
 
 const readFileAsync = fp => 
-  new Promise((resolve, reject) => readFile(fp, (err, data) => err ? reject(err) : resolve(data)))
+  new Promise((resolve, reject) => fs.readFile(fp, (err, data) => err ? reject(err) : resolve(data)))
 
 const stripLeadingSlash = s =>
   s.indexOf('/') === 0 ? s.substring(1) : s
 
-const stripEndingSlash = s => 
-  s.indexOf('/') === (s.length - 1) ? s.substring(0, s.length - 1) : s
+
 
 class Store extends BaseStore {
   constructor (config = {}) {
@@ -29,56 +28,55 @@ class Store extends BaseStore {
       serverSideEncryption,
       forcePathStyle,
       signatureVersion,
-      acl,
-      proxyHost
+      acl
     } = config
 
-    // Compatible with the aws-sdk's default environment variables
-    this.accessKeyId = accessKeyId;
-    this.secretAccessKey = secretAccessKey;
-    this.region = process.env.AWS_DEFAULT_REGION || region;
-
-    this.bucket = process.env.GHOST_STORAGE_ADAPTER_S3_PATH_BUCKET || bucket;
+    /*
+    *  Compatible with the aws-sdk's default environment variables
+    *  but with precedence of specific storage
+    */
+    this.accessKeyId   =        accessKeyId ||     process.env.AWS_ACCESS_KEY_ID
+    this.secretAccessKey =      secretAccessKey || process.env.AWS_SECRET_ACCESS_KEY
+    this.region =               region ||          process.env.AWS_DEFAULT_REGION;
+    this.bucket =               bucket;
     
-    this.proxyHost = proxyHost ? proxyHost.trim() : null;
     
-    // Optional configurations
-    this.host = (process.env.GHOST_STORAGE_ADAPTER_S3_ASSET_HOST || 
-               assetHost ||
-               `https://s3${this.region === 'us-east-1' ? '' : `-${this.region}`}.amazonaws.com/${this.bucket}`);
+    /**
+     *  Optional configurations
+     */
+    // hostWithPath
+    this.host =                 (assetHost || `https://s3${this.region === 'us-east-1' ? '' : `-${this.region}`}.amazonaws.com/${this.bucket}`);
 
-    this.pathPrefix = stripLeadingSlash(process.env.GHOST_STORAGE_ADAPTER_S3_PATH_PREFIX || pathPrefix || '')
-    this.endpoint = process.env.GHOST_STORAGE_ADAPTER_S3_ENDPOINT || endpoint || ''
-    this.serverSideEncryption = process.env.GHOST_STORAGE_ADAPTER_S3_SSE || serverSideEncryption || ''
-    this.s3ForcePathStyle = Boolean(process.env.GHOST_STORAGE_ADAPTER_S3_FORCE_PATH_STYLE) || Boolean(forcePathStyle) || false
-    this.signatureVersion = process.env.GHOST_STORAGE_ADAPTER_S3_SIGNATURE_VERSION || signatureVersion || 'v4'
-    this.acl = process.env.GHOST_STORAGE_ADAPTER_S3_ACL || acl || 'public-read'
+    this.pathPrefix =           stripLeadingSlash(pathPrefix || '')
+    this.endpoint =             endpoint || ''
+    this.serverSideEncryption = serverSideEncryption || ''
+    this.s3ForcePathStyle =     Boolean(forcePathStyle) || false
+    this.signatureVersion =     signatureVersion || 'v4'
+    this.acl =                  acl || 'public-read'
   }
 
   delete (fileName, targetDir) {
     const directory = targetDir || this.getTargetDir(this.pathPrefix)
 
-    return new Promise((resolve, reject) => {
-      this.s3()
+      return this.s3()
         .deleteObject({
           Bucket: this.bucket,
-          Key: stripLeadingSlash(join(directory, fileName))
-        }, (err) => err ? resolve(false) : resolve(true))
-    })
+          Key: stripLeadingSlash(path.join(directory, fileName))
+
+        }).promise().then(() => true).catch(err => false)
   }
 
   exists (fileName, targetDir) {
-    return new Promise((resolve, reject) => {
-      this.s3()
+      return this.s3()
         .getObject({
           Bucket: this.bucket,
-          Key: stripLeadingSlash(join(targetDir, fileName))
-        }, (err) => err ? resolve(false) : resolve(true))
-    })
+          Key: stripLeadingSlash(path.join(targetDir, fileName))
+
+        }).promise().then(() => true).catch((err) =>  false)
   }
 
   s3 () {
-    const options = {
+    const s3RequestParams = {
       bucket: this.bucket,
       region: this.region,
       signatureVersion: this.signatureVersion,
@@ -87,71 +85,60 @@ class Store extends BaseStore {
 
     // Set credentials only if provided, falls back to AWS SDK's default provider chain
     if (this.accessKeyId && this.secretAccessKey) {
-      options.credentials = new AWS.Credentials(this.accessKeyId, this.secretAccessKey)
+      s3RequestParams.credentials = new AWS.Credentials(this.accessKeyId, this.secretAccessKey)
     }
 
     if (this.endpoint !== '') {
-      options.endpoint = this.endpoint
+      s3RequestParams.endpoint = this.endpoint
     }
 
-    return new AWS.S3(options)
+    return new AWS.S3(s3RequestParams)
   }
 
-  save (image, targetDir) {
+  save (tmpFile, targetDir) {
     const directory = targetDir || this.getTargetDir(this.pathPrefix)
 
-    return new Promise((resolve, reject) => {
+    return Promise.all([ 
+        this.getUniqueFileName(tmpFile, directory), 
+        readFileAsync(tmpFile.path)
+      ])
+      .then(( [fileName, buffer ]) => {
+        
+        const normalizedFilename = stripLeadingSlash(fileName.toLowerCase());
+        
+        const ghostPath = normalizedFilename.match(/(\/\d{4}\/\d{2}\/.*)$/)
 
-      Promise.all([
-        this.getUniqueFileName(image, directory),
-        readFileAsync(image.path)
-      ]).then(([ fileName, file ]) => {
-
-        const normalizedFilename = fileName.toLowerCase()
-
-        let config = {
+        const s3RequestParams = {
           ACL: this.acl,
-          Body: file,
+          Body: buffer,
           Bucket: this.bucket,
           CacheControl: `max-age=${30 * 24 * 60 * 60}`,
-          ContentType: image.type,
-          Key: stripLeadingSlash(normalizedFilename)
+          ContentType: tmpFile.type,
+          Key: normalizedFilename
         }
 
         if (this.serverSideEncryption !== '') {
           config.ServerSideEncryption = this.serverSideEncryption
         }
 
-        this.s3()
-          .putObject(config, (err, data) => {
-            if(err) {
-              reject(err)
-            } else {
-              if (this.proxyHost) {
-                const url = this.proxyHost + '/' + normalizedFilename.match(/\d{4}\/\d{2}\/.*/)[0]
-                resolve(url)
-
-              } else {
-                resolve(`${this.host}/${normalizedFilename}`)
-
-              }
-            }
-          })
-      })
-      .catch(err => reject(err))
+        return this.s3().putObject(s3RequestParams).promise().then(data => {
+    
+            return `${this.host}/${ghostPath}`.replace(/\/\//g, '/')
+        })
     })
   }
 
   serve () {
     return (req, res, next) => {
-      const Key = stripLeadingSlash(stripEndingSlash(this.pathPrefix) + req.path).replace(/\/\//g, '/'); 
+      
+      const key = stripLeadingSlash(this.pathPrefix + req.path).replace(/\/\//g, '/'); 
       
       this.s3()
         .getObject({
           Bucket: this.bucket,
-          Key,
+          Key: key,
         })
-        .on('httpHeaders', (statusCode, headers, response) => { 
+        .on('httpHeaders', (statusCode, headers, response) => {
           res.set(headers) 
         })
         .createReadStream()
@@ -165,22 +152,23 @@ class Store extends BaseStore {
 
   read(options = {}) {
 
-    return new Promise((resolve, reject) => {
       // remove trailing slashes
       let path = (options.path || '').replace(/\/$|\\$/, '')
 
       // check if path is stored in s3 handled by us
       if (!path.startsWith(this.host)) {
-        reject(new Error(`${path} is not stored in s3`))
+        // try get in fileSystem
+        new Error(`${path} is not stored in s3`)
       }
+
       path = path.substring(this.host.length)
 
-      this.s3()
+      return this.s3()
         .getObject({
           Bucket: this.bucket,
           Key: stripLeadingSlash(path)
-        }, (err, data) => err ? reject(err) : resolve(data.Body))
-    })
+        }).promise()
+        .then(data => data.Body);
   }
 }
 
