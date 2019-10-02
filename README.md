@@ -11,7 +11,10 @@ you can download a bundle with all dependencies em copy to your storage path
 
 ```shell
 # for example
-$ wget https://github.com/luizamboni/ghost-s3-storage-adapter/blob/master/dist/0.0.1/s3.js  ./content/adapters/storage/s3.js
+# enter in ghost dir 
+$ cd ghost
+# dowload a bundle with your version preference
+$ wget -O ./content/adapters/storage/s3.js  https://raw.githubusercontent.com/luizamboni/ghost-s3-storage-adapter/master/dist/0.0.1/s3.js
 ```
 
 ## Configuration
