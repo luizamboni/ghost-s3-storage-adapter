@@ -1,7 +1,7 @@
 # Ghost storage adapter S3
 
 An AWS S3 storage adapter for Ghost 2.x
-
+based on ghost-storage-adapter-s3
 
 ## Installation
 
