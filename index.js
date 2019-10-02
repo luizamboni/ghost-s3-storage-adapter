@@ -4,9 +4,19 @@ const AWS = require('aws-sdk');
 const BaseStore = require('ghost-storage-base');
 const path = require('path');
 const fs = require('fs');
+const slugify = require('slugify');
 
-const readFileAsync = fp => 
-  new Promise((resolve, reject) => fs.readFile(fp, (err, data) => err ? reject(err) : resolve(data)))
+const readFileAsync = fp => {
+  return new Promise((resolve, reject) => { 
+     fs.readFile(fp, (err, data) => { 
+        if(err) {
+          reject(err) 
+        } else { 
+          resolve(data) 
+        }
+     })
+  })
+}
 
 const stripLeadingSlash = s =>
   s.indexOf('/') === 0 ? s.substring(1) : s
@@ -58,21 +68,22 @@ class Store extends BaseStore {
   delete (fileName, targetDir) {
     const directory = targetDir || this.getTargetDir(this.pathPrefix)
 
-      return this.s3()
-        .deleteObject({
-          Bucket: this.bucket,
-          Key: stripLeadingSlash(path.join(directory, fileName))
+    return this.s3()
+      .deleteObject({
+        Bucket: this.bucket,
+        Key: stripLeadingSlash(path.join(directory, fileName))
 
-        }).promise().then(() => true).catch(err => false)
+      }).promise().then(() => true).catch(err => false)
   }
 
   exists (fileName, targetDir) {
-      return this.s3()
-        .getObject({
-          Bucket: this.bucket,
-          Key: stripLeadingSlash(path.join(targetDir, fileName))
+  
+    return this.s3()
+      .getObject({
+        Bucket: this.bucket,
+        Key: stripLeadingSlash(path.join(targetDir, fileName))
 
-        }).promise().then(() => true).catch((err) =>  false)
+      }).promise().then(() => true).catch((err) =>  false)
   }
 
   s3 () {
@@ -94,8 +105,20 @@ class Store extends BaseStore {
 
     return new AWS.S3(s3RequestParams)
   }
+  
+  _normalizeFilename(fullFileName) {
+    const tokens = stripLeadingSlash(fullFileName).split('/')
+    const filename  = tokens.pop()
+    
+    
+    return [ 
+      ...tokens, 
+      slugify(filename, { lower: true }) 
+    ].join('/')
+  }
 
   save (tmpFile, targetDir) {
+
     const directory = targetDir || this.getTargetDir(this.pathPrefix)
 
     return Promise.all([ 
@@ -103,10 +126,14 @@ class Store extends BaseStore {
         readFileAsync(tmpFile.path)
       ])
       .then(( [fileName, buffer ]) => {
-        
-        const normalizedFilename = stripLeadingSlash(fileName.toLowerCase());
-        
-        const [ , ghostPath ] = normalizedFilename.match(/(\/\d{4}\/\d{2}\/.*)$/)
+
+        debugger
+        const normalizedFilename = this._normalizeFilename(fileName)
+
+        /**
+         * it is the path without any context (prefix, ghostPath or cdn path prefix)
+         */
+        const ghostPath = normalizedFilename.replace(this.pathPrefix, '')
 
         const s3RequestParams = {
           ACL: this.acl,
@@ -122,8 +149,10 @@ class Store extends BaseStore {
         }
 
         return this.s3().putObject(s3RequestParams).promise().then(data => {
-    
-            return `${this.host}/${ghostPath}`.replace(/\/\//g, '/')
+            return [
+              this.host.replace(/\/$/, ''),
+              ghostPath.replace(/^\//, '')
+            ].join('/')
         })
     })
   }
@@ -151,7 +180,6 @@ class Store extends BaseStore {
   }
 
   read(options = {}) {
-
       // remove trailing slashes
       let path = (options.path || '').replace(/\/$|\\$/, '')
 
