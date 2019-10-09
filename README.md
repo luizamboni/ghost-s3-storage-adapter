@@ -38,15 +38,9 @@ $ wget -O ./content/adapters/storage/s3.js  https://raw.githubusercontent.com/lu
   }
 }
 ```
+### Via environment variables
 
 Optionaly you can pass AWS configs as standart way, with env vars:
-
- - AWS_ACCESS_KEY_ID
- - AWS_SECRET_ACCESS_KEY
- - AWS_DEFAULT_REGION
-
-
-### Via environment variables
 
 ```
 AWS_ACCESS_KEY_ID
