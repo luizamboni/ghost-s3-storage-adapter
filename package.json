@@ -4,7 +4,7 @@
     "email": "luizamboni@hotmail.com"
   },
   "dependencies": {
-    "aws-sdk": "^2.331.0",
+    "aws-sdk": "^2.814.0",
     "ghost-storage-base": "0.0.1",
     "slugify": "^1.3.5"
   },
